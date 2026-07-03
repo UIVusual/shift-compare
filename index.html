@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shift Compare</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #ececee;
+    --surface: #ffffff;
+    --surface-2: #f5f5f7;
+    --border: #d9d9de;
+    --border-soft: #e8e8ec;
+    --text: #1d1d1f;
+    --text-2: #515154;
+    --text-3: #86868b;
+    --ink: #111113;
+    --shadow-window: 0 22px 60px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.05), 0 6px 18px rgba(0,0,0,.06);
+    --radius-window: 18px;
+    --radius-card: 14px;
+    --radius-sm: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  button, summary, .dropzone { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 700px at 20% -10%, #f7f7f9 0%, transparent 60%),
+      radial-gradient(1000px 600px at 110% 110%, #f2f2f4 0%, transparent 55%),
+      var(--bg);
+    color: var(--text);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── macOS window ─────────────────────────────── */
+  .window {
+    width: 100%;
+    max-width: 980px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-window);
+    box-shadow: var(--shadow-window);
+    overflow: hidden;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    background: linear-gradient(#fbfbfd, #f3f3f5);
+    border-bottom: 1px solid var(--border-soft);
+    user-select: none;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.18); }
+  .dot:nth-child(1) { background: #3a3a3c; }
+  .dot:nth-child(2) { background: #8e8e93; }
+  .dot:nth-child(3) { background: #d1d1d6; }
+  .titlebar .title {
+    flex: 1;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    letter-spacing: .01em;
+    margin-right: 52px; /* balance the dots */
+  }
+
+  .content { padding: 24px; }
+
+  /* ── upload zone ──────────────────────────────── */
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface-2);
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, transform .1s;
+  }
+  .dropzone:hover { border-color: var(--text-3); }
+  .dropzone.dragover { border-color: var(--ink); background: #ededf0; transform: scale(1.005); }
+  .dropzone .icon { font-size: 34px; margin-bottom: 10px; filter: grayscale(1); }
+  .dropzone h2 { font-size: 17px; font-weight: 650; margin-bottom: 4px; }
+  .dropzone p { font-size: 13px; color: var(--text-3); }
+  .dropzone .hint { margin-top: 14px; }
+  .btn {
+    display: inline-block;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .82; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  input[type=file] { display: none; }
+
+  .filebar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+  }
+  .filebar .meta { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filebar .meta strong { color: var(--text); font-weight: 650; }
+  .filebar .btn { padding: 5px 14px; font-size: 12px; }
+
+  .error {
+    display: none;
+    margin-top: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--ink);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    background: var(--surface);
+  }
+
+  /* ── main grid ────────────────────────────────── */
+  .app { display: none; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 820px) { .app { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 640px) {
+    body { padding: 12px 6px 24px; }
+    .content { padding: 12px; }
+    .card { padding: 12px; }
+    .titlebar { padding-left: 12px; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 18px;
+  }
+
+  /* ── calendar ─────────────────────────────────── */
+  .cal-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    padding: 0 4px;
+  }
+  .cal-head .month { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .cal-head .year { font-size: 13px; color: var(--text-3); font-weight: 500; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .dow {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 4px 0 8px;
+  }
+  .day {
+    aspect-ratio: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    transition: background .12s, border-color .12s;
+  }
+  .day:hover { background: var(--surface-2); border-color: var(--border-soft); }
+  .day.empty { visibility: hidden; }
+  .day .n { line-height: 1; }
+  .day .count { font-size: 9.5px; color: var(--text-3); line-height: 1; font-weight: 600; }
+  .day.selected { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .day.selected .count { color: rgba(255,255,255,.72); }
+  .day .pdots { display: flex; gap: 3px; height: 5px; }
+  .day .pdots:empty { display: none; }
+  .day .pdots i { width: 5px; height: 5px; border-radius: 50%; }
+  .chip .cdot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: 0;
+  }
+  .day.has-ot::after {
+    content: "";
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .55;
+  }
+
+  /* ── detail panel ─────────────────────────────── */
+  .detail .placeholder {
+    color: var(--text-3);
+    font-size: 14px;
+    text-align: center;
+    padding: 70px 20px;
+  }
+  .detail-date { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .detail-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
+  .stats { display: flex; gap: 10px; margin: 16px 0 20px; flex-wrap: wrap; }
+  .stat {
+    flex: 1;
+    min-width: 90px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+  }
+  .stat .num { font-size: 24px; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
+  .stat .lbl { font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-top: 3px; }
+  .stat.primary { background: var(--ink); border-color: var(--ink); }
+  .stat.primary .num { color: #fff; }
+  .stat.primary .lbl { color: rgba(255,255,255,.65); }
+
+  .section { margin-bottom: 18px; }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-2);
+    margin-bottom: 8px;
+  }
+  .section-title .sym {
+    width: 20px; height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10.5px;
+    font-weight: 800;
+  }
+  .section-title .sym.filled { background: var(--ink); color: #fff; }
+  .section-title .cnt { color: var(--text-3); font-weight: 600; }
+
+  .person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    background: var(--surface);
+  }
+  .person .avatar {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--text-2);
+    flex-shrink: 0;
+  }
+  .person .who { flex: 1; min-width: 0; }
+  .person .name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person .role { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person.muted { opacity: .55; }
+
+  .badge {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1.5px solid var(--ink);
+    color: var(--ink);
+    background: var(--surface);
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .badge.solid { background: var(--ink); color: #fff; }
+
+  details.off-list { border-top: 1px solid var(--border-soft); padding-top: 12px; }
+  details.off-list summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-3);
+    list-style: none;
+    user-select: none;
+  }
+  details.off-list summary::before { content: "▸ "; }
+  details.off-list[open] summary::before { content: "▾ "; }
+  details.off-list .person { margin-top: 8px; }
+
+  .footer { margin-top: 18px; text-align: center; font-size: 11px; color: var(--text-3); }
+
+  /* ── compare (work together) ──────────────────── */
+  .compare { grid-column: 1 / -1; }
+  .compare-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .compare-head h3 { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .compare-head .sub { font-size: 12px; color: var(--text-3); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .chip {
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .chip:hover { border-color: var(--text-3); }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .match-results { border-top: 1px solid var(--border-soft); padding-top: 14px; }
+  .match-empty { font-size: 13px; color: var(--text-3); text-align: center; padding: 10px 0 4px; }
+  .match-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    padding: 9px 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .match-row:hover { background: var(--surface-2); }
+  .match-row .d { font-size: 13.5px; font-weight: 650; flex: 1; }
+  .match-row .badge { font-size: 10px; }
+  .day.match { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .day.match.selected { box-shadow: inset 0 0 0 1.5px #fff; }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <span class="title">Shift Compare</span>
+  </div>
+  <div class="content">
+
+    <div class="filebar" id="filebar">
+      <span class="meta" id="fileMeta"></span>
+      <button class="btn ghost" id="changeFileBtn">Change PDF</button>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="icon">📄</div>
+      <h2>Drop your shift schedule PDF here</h2>
+      <p>The monthly “Shift Table” PDF — parsed entirely in your browser, nothing is uploaded.</p>
+      <div class="hint">
+        <button class="btn" type="button">Choose PDF…</button>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <div class="error" id="errorBox"></div>
+
+    <div class="app" id="app">
+      <div class="card">
+        <div class="cal-head">
+          <span class="month" id="calMonth"></span>
+          <span class="year" id="calYear"></span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="card detail" id="detail">
+        <div class="placeholder">Select a date to see who’s working.</div>
+      </div>
+      <div class="card compare">
+        <div class="compare-head">
+          <h3>Who works together?</h3>
+          <span class="sub">Pick two or more people — matching dates share the same shift</span>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="match-results" id="matchResults" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="footer">A = Day · B = Night · T = Training · H = Holiday — OT shifts are flagged with an outlined badge.</div>
+  </div>
+</div>
+
+<script src="parser.js"></script>
+<script>
+(function () {
+  'use strict';
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  var SHIFT_LABELS = ShiftParser.SHIFT_LABELS;
+  var schedule = null;
+  var selectedDay = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var dropzone = $('dropzone'), fileInput = $('fileInput'), errorBox = $('errorBox');
+  var app = $('app'), filebar = $('filebar');
+
+  // ── file handling ──────────────────────────────
+  dropzone.addEventListener('click', function () { fileInput.click(); });
+  $('changeFileBtn').addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files[0]) loadPdf(fileInput.files[0]);
+  });
+  ;['dragover', 'dragenter'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) { e.preventDefault(); dropzone.classList.add('dragover'); });
+  });
+  ;['dragleave', 'drop'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) { e.preventDefault(); dropzone.classList.remove('dragover'); });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    var f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') loadPdf(f);
+    else showError('Please drop a PDF file.');
+  });
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+  }
+
+  function loadPdf(file) {
+    errorBox.style.display = 'none';
+    var reader = new FileReader();
+    reader.onload = function () {
+      parsePdfData(new Uint8Array(reader.result), file.name);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function parsePdfData(data, name) {
+    pdfjsLib.getDocument({ data: data }).promise.then(function (doc) {
+      var jobs = [];
+      for (var p = 1; p <= doc.numPages; p++) jobs.push(extractPage(doc, p));
+      return Promise.all(jobs);
+    }).then(function (pages) {
+      schedule = ShiftParser.parseShiftSchedule(pages);
+      onParsed(name);
+    }).catch(function (err) {
+      showError('Could not parse this PDF: ' + err.message);
+    });
+  }
+
+  function extractPage(doc, num) {
+    return doc.getPage(num).then(function (page) {
+      var vp = page.getViewport({ scale: 1 });
+      return page.getTextContent().then(function (tc) {
+        return {
+          pageHeight: vp.height,
+          items: tc.items.map(function (it) {
+            return { str: it.str, x: it.transform[4], y: vp.height - it.transform[5], width: it.width };
+          })
+        };
+      });
+    });
+  }
+
+  function onParsed(fileName) {
+    dropzone.style.display = 'none';
+    filebar.style.display = 'flex';
+    $('fileMeta').innerHTML = '<strong>' + escapeHtml(fileName) + '</strong> — ' +
+      schedule.employees.length + ' people · ' +
+      (schedule.monthName ? schedule.monthName + ' ' + schedule.year : 'month unknown');
+    app.style.display = 'grid';
+    selectedDay = null;
+    selectedPeople.clear();
+    renderCalendar();
+    renderChips();
+    renderMatches();
+    $('detail').innerHTML = '<div class="placeholder">Select a date to see who’s working.</div>';
+  }
+
+  // ── who works together ─────────────────────────
+  var selectedPeople = new Set();
+  var DOT_COLORS = ['#e0332e', '#2563eb', '#189a4a', '#e88f00', '#8b3fd4', '#0a9bab', '#d6357f', '#7a8c1e'];
+  var chipEls = {};
+
+  // the shift a person actually works that day: rostered A/B/T,
+  // or their OT shift if they are otherwise off
+  function effectiveCode(e, d) {
+    var c = e.shifts[d];
+    if (c === 'A' || c === 'B' || c === 'T') return c;
+    var o = e.ot[d];
+    if (o === 'A' || o === 'B' || o === 'T') return o;
+    return null;
+  }
+
+  function chipLabel(e) {
+    var parts = e.name.split('/');
+    return (parts[1] || parts[0]).trim();
+  }
+
+  function renderChips() {
+    var box = $('chips');
+    box.innerHTML = '';
+    chipEls = {};
+    schedule.employees.forEach(function (e, i) {
+      if (/^vacant$/i.test(e.name) || !Object.keys(e.shifts).length) return;
+      var chip = document.createElement('button');
+      chip.className = 'chip';
+      chip.innerHTML = '<span class="cdot" style="display:none"></span>' + escapeHtml(chipLabel(e));
+      chipEls[i] = chip;
+      chip.title = e.name + ' — ' + e.id;
+      chip.addEventListener('click', function () {
+        if (selectedPeople.has(i)) selectedPeople.delete(i);
+        else selectedPeople.add(i);
+        chip.classList.toggle('on', selectedPeople.has(i));
+        renderMatches();
+      });
+      box.appendChild(chip);
+    });
+  }
+
+  function renderMatches() {
+    var box = $('matchResults');
+    var daysInMonth = new Date(schedule.year, schedule.month, 0).getDate();
+    var people = Array.from(selectedPeople).map(function (i) { return schedule.employees[i]; });
+
+    var matches = [];
+    if (people.length >= 2) {
+      for (var d = 1; d <= daysInMonth; d++) {
+        var codes = people.map(function (e) { return effectiveCode(e, d); });
+        if (codes[0] && codes.every(function (c) { return c === codes[0]; })) {
+          var anyOT = people.some(function (e) { return e.ot[d]; });
+          matches.push({ day: d, code: codes[0], ot: anyOT });
+        }
+      }
+    }
+
+    // ring the matching days on the calendar
+    document.querySelectorAll('.day').forEach(function (el) {
+      el.classList.toggle('match', matches.some(function (m) { return m.day === +el.dataset.day; }));
+    });
+
+    renderDots();
+
+    if (people.length < 2) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+
+    if (!matches.length) {
+      box.innerHTML = '<div class="match-empty">' +
+        people.map(chipLabel).map(escapeHtml).join(' + ') +
+        ' never share a shift this month.</div>';
+      return;
+    }
+
+    box.innerHTML = '';
+    matches.forEach(function (m) {
+      var dateStr = new Date(schedule.year, schedule.month - 1, m.day)
+        .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      var row = document.createElement('button');
+      row.className = 'match-row';
+      row.innerHTML = '<span class="d">' + dateStr + '</span>' +
+        '<span class="badge solid">' + (SHIFT_LABELS[m.code] || m.code) + '</span>' +
+        (m.ot ? '<span class="badge">OT</span>' : '');
+      row.addEventListener('click', function () { selectDay(m.day); });
+      box.appendChild(row);
+    });
+  }
+
+  // color dots marking the selected people's working days
+  function renderDots() {
+    var order = Array.from(selectedPeople);
+    var colorOf = {};
+    order.forEach(function (idx, k) { colorOf[idx] = DOT_COLORS[k % DOT_COLORS.length]; });
+
+    Object.keys(chipEls).forEach(function (i) {
+      var dot = chipEls[i].querySelector('.cdot');
+      if (colorOf[i]) {
+        dot.style.background = colorOf[i];
+        dot.style.display = 'inline-block';
+      } else {
+        dot.style.display = 'none';
+      }
+    });
+
+    document.querySelectorAll('.day').forEach(function (el) {
+      var box = el.querySelector('.pdots');
+      if (!box) return;
+      var d = +el.dataset.day;
+      var html = '';
+      order.forEach(function (idx) {
+        if (effectiveCode(schedule.employees[idx], d)) {
+          html += '<i style="background:' + colorOf[idx] + '"></i>';
+        }
+      });
+      box.innerHTML = html;
+    });
+  }
+
+  // ── per-day computation ────────────────────────
+  function dayData(day) {
+    var groups = { A: [], B: [], T: [] };
+    var off = [];
+    var otCount = 0;
+    schedule.employees.forEach(function (e) {
+      var code = e.shifts[day];
+      var otCode = e.ot[day] || null;
+      if (otCode) otCount++;
+      if (code === 'A' || code === 'B' || code === 'T') {
+        groups[code].push({ emp: e, ot: otCode });
+      } else if (otCode && (otCode === 'A' || otCode === 'B' || otCode === 'T')) {
+        // off/holiday on the roster but called in for an OT shift
+        groups[otCode].push({ emp: e, ot: otCode, otOnly: true });
+      } else if (code) {
+        off.push({ emp: e, code: code });
+      }
+    });
+    var total = groups.A.length + groups.B.length + groups.T.length;
+    return { groups: groups, off: off, total: total, otCount: otCount };
+  }
+
+  // ── calendar ───────────────────────────────────
+  function renderCalendar() {
+    var month = schedule.month || (new Date()).getMonth() + 1;
+    var year = schedule.year || (new Date()).getFullYear();
+    $('calMonth').textContent = schedule.monthName || '';
+    $('calYear').textContent = year;
+
+    var grid = $('calGrid');
+    grid.innerHTML = '';
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (d) {
+      var el = document.createElement('div');
+      el.className = 'dow';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    var first = new Date(year, month - 1, 1).getDay();
+    var daysInMonth = new Date(year, month, 0).getDate();
+
+    for (var i = 0; i < first; i++) {
+      var pad = document.createElement('button');
+      pad.className = 'day empty';
+      grid.appendChild(pad);
+    }
+    for (var d = 1; d <= daysInMonth; d++) {
+      (function (d) {
+        var info = dayData(d);
+        var btn = document.createElement('button');
+        btn.className = 'day' + (info.otCount ? ' has-ot' : '');
+        btn.innerHTML = '<span class="n">' + d + '</span>' +
+          (info.total ? '<span class="count">' + info.total + '</span>' : '') +
+          '<span class="pdots"></span>';
+        btn.addEventListener('click', function () { selectDay(d); });
+        btn.dataset.day = d;
+        grid.appendChild(btn);
+      })(d);
+    }
+  }
+
+  function selectDay(d) {
+    selectedDay = d;
+    document.querySelectorAll('.day').forEach(function (el) {
+      el.classList.toggle('selected', +el.dataset.day === d);
+    });
+    renderDetail(d);
+  }
+
+  // ── detail panel ───────────────────────────────
+  function personRow(entry, muted) {
+    var e = entry.emp;
+    var namePart = e.name.split('/')[0].trim();
+    var initials = namePart.slice(0, 2).toUpperCase();
+    var badges = '';
+    if (entry.ot) {
+      badges += '<span class="badge">OT · ' + (SHIFT_LABELS[entry.ot] || entry.ot) + '</span>';
+    }
+    if (entry.otOnly) {
+      badges += ' <span class="badge solid">Called in</span>';
+    }
+    if (entry.code && muted) {
+      badges = '<span class="badge" style="opacity:.6">' + (SHIFT_LABELS[entry.code] || entry.code) + '</span>';
+    }
+    return '<div class="person' + (muted ? ' muted' : '') + '">' +
+      '<span class="avatar">' + escapeHtml(initials) + '</span>' +
+      '<span class="who"><span class="name">' + escapeHtml(e.name) + '</span>' +
+      '<span class="role">' + escapeHtml(e.id) + '</span></span>' +
+      badges + '</div>';
+  }
+
+  function section(sym, filled, title, entries) {
+    if (!entries.length) return '';
+    return '<div class="section">' +
+      '<div class="section-title"><span class="sym' + (filled ? ' filled' : '') + '">' + sym + '</span>' +
+      title + ' <span class="cnt">· ' + entries.length + '</span></div>' +
+      entries.map(function (en) { return personRow(en, false); }).join('') +
+      '</div>';
+  }
+
+  function renderDetail(d) {
+    var info = dayData(d);
+    var year = schedule.year, month = schedule.month;
+    var dateObj = new Date(year, month - 1, d);
+    var dateStr = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    var html =
+      '<div class="detail-date">' + dateStr + '</div>' +
+      '<div class="detail-sub">' + info.total + ' ' + (info.total === 1 ? 'person' : 'people') + ' scheduled' +
+      (info.otCount ? ' · ' + info.otCount + ' with overtime' : '') + '</div>' +
+      '<div class="stats">' +
+        '<div class="stat primary"><div class="num">' + info.total + '</div><div class="lbl">On duty</div></div>' +
+        '<div class="stat"><div class="num">' + info.groups.A.length + '</div><div class="lbl">Day</div></div>' +
+        '<div class="stat"><div class="num">' + info.groups.B.length + '</div><div class="lbl">Night</div></div>' +
+        '<div class="stat"><div class="num">' + info.otCount + '</div><div class="lbl">Overtime</div></div>' +
+      '</div>' +
+      section('A', true, 'Day Shift', info.groups.A) +
+      section('B', false, 'Night Shift', info.groups.B) +
+      section('T', false, 'Training', info.groups.T);
+
+    if (info.off.length) {
+      html += '<details class="off-list"><summary>Off / Holiday · ' + info.off.length + '</summary>' +
+        info.off.map(function (en) { return personRow(en, true); }).join('') +
+        '</details>';
+    }
+    $('detail').innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>

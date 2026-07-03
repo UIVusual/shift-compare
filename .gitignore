@@ -1,0 +1,4 @@
+# keep real schedules (employee names) out of the public repo
+shift.pdf
+*.pdf
+.claude/
